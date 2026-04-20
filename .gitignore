@@ -1,1 +1,14 @@
-blog-aggregator
+# Compiled executable
+/blog-aggregator
+
+# Go workspace files (if you ever use multi-module workspaces)
+go.work
+go.work.sum
+
+# Editor and OS specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
