@@ -165,12 +165,27 @@ func handlerAddFeed(s *state, cmd command) error {
 	return nil
 }
 
+func handlerFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed getting feed: %v", err)
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("Name: %s\n", feed.Name)
+		fmt.Printf("URL: %s\n", feed.Url)
+		fmt.Printf("User Name: %s\n", feed.UserName)
+		fmt.Println("-------------------------------------")
+	}
+	return nil
+}
+
 func main() {
 	cfg, err := config.Read()
 	if err != nil {
 		log.Fatalf("failed to read config file: %v", err)
 	}
-	fmt.Printf("initial config: %+v\n", cfg)
+	//fmt.Printf("initial config: %+v\n", cfg)
 
 	db, err := sql.Open("postgres", cfg.DBURL)
 	if err != nil {
@@ -193,6 +208,7 @@ func main() {
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", handlerAgg)
 	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("feeds", handlerFeeds)
 
 	args := os.Args
 
