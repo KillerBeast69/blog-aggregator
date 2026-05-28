@@ -43,7 +43,7 @@ func (c *commands) run(s *state, cmd command) error {
 
 func handlerLogin(s *state, cmd command) error {
 	if len(cmd.args) == 0 {
-		return fmt.Errorf("the login handler expects a single argument, the username")
+		return fmt.Errorf("the login handler expects a single argument, login <the username>")
 	}
 
 	username := cmd.args[0]
@@ -65,7 +65,7 @@ func handlerLogin(s *state, cmd command) error {
 
 func handlerRegister(s *state, cmd command) error {
 	if len(cmd.args) == 0 {
-		return fmt.Errorf("the register handler expects a single argument, the username")
+		return fmt.Errorf("the register handler expects a single argument,register <the username>")
 	}
 	username := cmd.args[0]
 	// how do I create a new user in the database??
@@ -134,7 +134,7 @@ func handlerAgg(s *state, cmd command) error {
 
 func handlerAddFeed(s *state, cmd command) error {
 	if len(cmd.args) < 2 {
-		return fmt.Errorf("the addfeed handler expects two arguments, <the name of the feed> and <the url of the feed>")
+		return fmt.Errorf("the addfeed handler expects two arguments,\naddfeed <the name of the feed> and <the url of the feed>")
 	}
 
 	name := cmd.args[0]
@@ -161,6 +161,19 @@ func handlerAddFeed(s *state, cmd command) error {
 		return fmt.Errorf("failed getting feed records: %v", err)
 	}
 
+	followParams := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    current_urs.ID,
+		FeedID:    feed.ID,
+	}
+
+	_, err = s.db.CreateFeedFollow(context.Background(), followParams)
+	if err != nil {
+		return fmt.Errorf("failed to automatically follow feed: %v", err)
+	}
+
 	fmt.Println(feed)
 	return nil
 }
@@ -175,9 +188,70 @@ func handlerFeeds(s *state, cmd command) error {
 		fmt.Printf("Name: %s\n", feed.Name)
 		fmt.Printf("URL: %s\n", feed.Url)
 		fmt.Printf("User Name: %s\n", feed.UserName)
-		fmt.Println("-------------------------------------")
+		fmt.Println("---------------------")
 	}
 	return nil
+}
+
+func handlerFollow(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("the follow handler expects a single argument, follow <url>")
+	}
+
+	url := cmd.args[0]
+
+	current_user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %v", err)
+	}
+
+	feed, err := s.db.GetFeedByURL(context.Background(), url)
+	if err != nil {
+		return fmt.Errorf("could not find feed: %v", err)
+	}
+
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    current_user.ID,
+		FeedID:    feed.ID,
+	}
+
+	follow, err := s.db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		return fmt.Errorf("failed to create feed follow: %v", err)
+	}
+
+	fmt.Printf("successfully followed feed: %s\n", follow.FeedName)
+	fmt.Printf("current user: %s\n", follow.UserName)
+
+	return nil
+}
+
+func handlerFollowing(s *state, cmd command) error {
+	current_user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+	if err != nil {
+		return fmt.Errorf("failed to get current user: %v", err)
+	}
+
+	follows, err := s.db.GetFeedFollowsForUser(context.Background(), current_user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get feed follows: %v", err)
+	}
+
+	if len(follows) == 0 {
+		fmt.Println("you dont follow any feeds")
+		return nil
+	}
+
+	fmt.Printf("feeds followed by %s:\n", current_user.Name)
+	for _, follow := range follows {
+		fmt.Printf("* %s\n", follow.FeedName)
+	}
+
+	return nil
+
 }
 
 func main() {
@@ -209,6 +283,8 @@ func main() {
 	cmds.register("agg", handlerAgg)
 	cmds.register("addfeed", handlerAddFeed)
 	cmds.register("feeds", handlerFeeds)
+	cmds.register("follow", handlerFollow)
+	cmds.register("following", handlerFollowing)
 
 	args := os.Args
 
