@@ -121,15 +121,26 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	url := "https://www.wagslane.dev/index.xml"
+	//url := "https://www.wagslane.dev/index.xml"
 
-	feed, err := fetchFeed(context.Background(), url)
-	if err != nil {
-		return err
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("agg handler expects a single arguement: time_between_request (1s, 6m, 4h etc)")
 	}
 
-	fmt.Println(feed)
-	return nil
+	tbr := cmd.args[0]
+
+	time_between_request, err := time.ParseDuration(tbr)
+	if err != nil {
+		return fmt.Errorf("error: %v", err)
+	}
+
+	fmt.Printf("collecting feeds every %s\n", time_between_request)
+
+	ticker := time.NewTicker(time_between_request)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
+
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
@@ -182,6 +193,11 @@ func handlerFeeds(s *state, cmd command) error {
 	feeds, err := s.db.GetFeeds(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed getting feed: %v", err)
+	}
+
+	if len(feeds) == 0 {
+		fmt.Println("no feeds available :(")
+		return nil
 	}
 
 	for _, feed := range feeds {
