@@ -298,22 +298,36 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 	return nil
 }
 
-func handlerBrowser(s *state, cmd command) error {
-	limit := "2"
-	if len(cmd.args) != 0 {
-		limit = cmd.args[0]
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.args) > 0 {
+		parsed_limit, err := strconv.Atoi(cmd.args[0])
+		if err != nil {
+			return fmt.Errorf("error while parsing limit: %v", err)
+		}
+		limit = parsed_limit
 	}
 
-	limit64, err := strconv.ParseInt(limit, 10, 32)
-	if err != nil {
-		return fmt.Errorf("error while converting limit to number: %v", err)
-	}
-
-	limit32 := int32(limit64)
-
-	_, err = s.db.GetPostsForUser(context.Background(), limit32)
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
 	if err != nil {
 		return fmt.Errorf("error while getting post: %v", err)
+	}
+
+	if len(posts) == 0 {
+		fmt.Println("no posts to show :(")
+		return nil
+	}
+
+	fmt.Printf("showing %d posts for %s\n", len(posts), user.Name)
+	for _, post := range posts {
+		if post.Description.Valid {
+			fmt.Printf("* %s - %s\n  %s\n", post.Title, post.Url, post.Description.String)
+		} else {
+			fmt.Printf("* %s - %s\n", post.Title, post.Url)
+		}
 	}
 
 	return nil
@@ -351,7 +365,7 @@ func main() {
 	cmds.register("follow", middlewareLoggedIn(handlerFollow))
 	cmds.register("following", middlewareLoggedIn(handlerFollowing))
 	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
-	cmds.register("browser", handlerBrowser)
+	cmds.register("browse", middlewareLoggedIn(handlerBrowse))
 
 	args := os.Args
 

@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ values(
     $7,
     $8
 )
+on conflict (url) do nothing
 returning id, created_at, updated_at, title, url, description, published_at, feed_id
 `
 
@@ -33,8 +35,8 @@ type CreatePostParams struct {
 	UpdatedAt   time.Time
 	Title       string
 	Url         string
-	Description string
-	PublishedAt string
+	Description sql.NullString
+	PublishedAt time.Time
 	FeedID      uuid.UUID
 }
 
@@ -64,14 +66,21 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 }
 
 const getPostsForUser = `-- name: GetPostsForUser :many
-select id, created_at, updated_at, title, url, description, published_at, feed_id 
+select posts.id, posts.created_at, posts.updated_at, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id
 from posts
-order by published_at desc 
-limit $1
+join feed_follows on posts.feed_id = feed_follows.feed_id
+where feed_follows.user_id = $1
+order by posts.published_at desc 
+limit $2
 `
 
-func (q *Queries) GetPostsForUser(ctx context.Context, limit int32) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, getPostsForUser, limit)
+type GetPostsForUserParams struct {
+	UserID uuid.UUID
+	Limit  int32
+}
+
+func (q *Queries) GetPostsForUser(ctx context.Context, arg GetPostsForUserParams) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsForUser, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

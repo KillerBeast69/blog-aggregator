@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
-
+	"log"
 	"github.com/KillerBeast69/blog-aggregator/internal/database"
 	"github.com/google/uuid"
 )
@@ -37,6 +37,12 @@ func scrapeFeeds(s *state) error {
 
 	fmt.Printf("\n--- found %d posts for %s ---\n", len(rssfeed.Channel.Item), feed.Name)
 	for _, item := range rssfeed.Channel.Item {
+		pudDate, err := parseData(item.PubDate)
+		if err != nil {
+			log.Printf("could not parse date for post %s: %v", item.Title, err)
+			continue
+		}
+
 		fmt.Printf("* %s\n", item.Title)
 		post_params := database.CreatePostParams{
 			ID:          uuid.New(),
@@ -44,20 +50,33 @@ func scrapeFeeds(s *state) error {
 			UpdatedAt:   time.Now(),
 			Title:       item.Title,
 			Url:         item.Link,
-			Description: item.Description,
-			PublishedAt: item.PubDate,
+			Description: sql.NullString{
+				String: item.Description,
+				Valid:  item.Description != "",
+			},
+			PublishedAt: pudDate,
 			FeedID:      feed.ID,
 		}
 
-		_, err := s.db.CreatePost(context.Background(), post_params)
-		if err != nil {
-			// where should I log my error?
-			return fmt.Errorf("error while creating a post: %v", err)
+		_, err = s.db.CreatePost(context.Background(), post_params)
+		if err != nil && err != sql.ErrNoRows {
+			log.Printf("error while creating a post: %v", err)
 		}
-
-		// how do I convert the data into database sql type
-
 	}
-
 	return nil
+}
+
+func parseData(dataStr string) (time.Time, error) {
+	layouts := []string{
+		time.RFC1123Z,
+		time.RFC1123,
+		time.RFC3339,
+	}
+		
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, dataStr); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("could not parse date: %s", dataStr)
 }
