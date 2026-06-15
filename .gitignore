@@ -12,3 +12,6 @@ go.work.sum
 *.swo
 *~
 .DS_Store
+
+# Database migration binaries
+goose-*
